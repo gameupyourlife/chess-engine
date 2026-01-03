@@ -1,7 +1,5 @@
 ﻿namespace chess_engine.game
 {
-
-
     public enum PieceType
     {
         Pawn,
@@ -14,496 +12,304 @@
 
     internal class Piece
     {
+        private static readonly AttackDetector _attackDetector = new();
+
         public PieceType Type { get; private set; }
         public PlayerColor Color { get; private set; }
-        public (int, int) Position { get; set; }
+        public Square Position { get; set; }
 
-        public List<(int, int)> ValidTargetPostions { get; set; }
+        public List<Square> ValidTargetPositions { get; private set; } = [];
+
+        // Keep for backward compatibility
+        public List<(int, int)> ValidTargetPostions
+        {
+            get => ValidTargetPositions.Select(s => (s.Row, s.Col)).ToList();
+            set => ValidTargetPositions = value.Select(t => new Square(t.Item1, t.Item2)).ToList();
+        }
 
         public Piece(PieceType type, PlayerColor color, (int, int) position)
         {
             Type = type;
             Color = color;
-            Position = position;
+            Position = new Square(position.Item1, position.Item2);
         }
 
         public void CalculateValidTargetPositions(Board board, bool reUsePrecalculated = false)
         {
-            ValidTargetPostions = new List<(int, int)>();
-
-            switch (Type)
+            ValidTargetPositions = Type switch
             {
-                case PieceType.Pawn:
-                    CalculatePawnMoves(board);
-                    break;
-                case PieceType.Rook:
-                    CalculateRookMoves(board);
-                    break;
-                case PieceType.Knight:
-                    CalculateKnightMoves(board);
-                    break;
-                case PieceType.Bishop:
-                    CalculateBishopMoves(board);
-                    break;
-                case PieceType.Queen:
-                    CalculateQueenMoves(board);
-                    break;
-                case PieceType.King:
-                    CalculateKingMoves(board);
-                    break;
-                default:
-                    throw new NotImplementedException($"Move calculation for {Type} not implemented.");
-            }
-
+                PieceType.Pawn => CalculatePawnMoves(board),
+                PieceType.Rook => CalculateSlidingMoves(board, Direction.Orthogonal),
+                PieceType.Knight => CalculateKnightMoves(board),
+                PieceType.Bishop => CalculateSlidingMoves(board, Direction.Diagonal),
+                PieceType.Queen => CalculateSlidingMoves(board, Direction.All),
+                PieceType.King => CalculateKingMoves(board),
+                _ => throw new NotImplementedException($"Move calculation for {Type} not implemented.")
+            };
         }
 
-        /// <summary>
-        /// ToDo: Implement castle
-        /// ToDo: Implement promotion
-        /// ToDO: En Passant make move handle -> remove captured pawn
-        /// </summary>
-        /// <param name="board"></param>
-
-        private void CalculateKingMoves(Board board)
+        public int CalculatePositionScore(Board board)
         {
-
-            if (!SquareIsUnderAttack(Position, board))
+            return Type switch
             {
-                if (board.CastleRights.Contains(KastleRights.WhiteKingside) && Color.Equals(PlayerColor.White) || board.CastleRights.Contains(KastleRights.BlackKingside) && Color.Equals(PlayerColor.Black))
+                PieceType.Pawn => CalculatePawnPositionScore(board),
+                PieceType.Knight => CalculateKnightPositionScore(board),
+                PieceType.King => CalculateKingPositonScore(board),
+                _ => 0
+            };
+        }
+
+        private int CalculateKingPositonScore(Board board)
+        {
+            return 0;
+        }
+
+        private int CalculateKnightPositionScore(Board board)
+        {
+            return 0;
+        }
+
+        private int CalculatePawnPositionScore(Board board)
+        {
+            return 0;
+            int direction = Color == PlayerColor.White ? -1 : 1;
+            var captureDirections = new[] { new Direction(direction, -1), new Direction(direction, 1) };
+
+            foreach (var captureDir in captureDirections)
+            {
+                var protectionPos = Position + captureDir;
+
+                if (!protectionPos.IsWithinBounds())
+                    continue;
+
+                var targetPiece = board.ChessBoard[protectionPos.Row][protectionPos.Col];
+
+                // Normal capture
+                if (targetPiece != null && targetPiece.Color == Color)
                 {
-                    var targetPiece = board.ChessBoard[Position.Item1][Position.Item2 + 1];
-                    var targetPiece2 = board.ChessBoard[Position.Item1][Position.Item2 + 2];
-                    if (targetPiece == null && targetPiece2 == null && !SquareIsUnderAttack((Position.Item1, 5), board) && !SquareIsUnderAttack((Position.Item1, 6), board))
-                    {
-                        ValidTargetPostions.Add((Position.Item1, 7));
-                    }
-                }
-                if (board.CastleRights.Contains(KastleRights.WhiteQueenside) && Color.Equals(PlayerColor.White) || board.CastleRights.Contains(KastleRights.BlackQueenside) && Color.Equals(PlayerColor.Black))
-                {
-                    var targetPiece = board.ChessBoard[Position.Item1][Position.Item2 - 1];
-                    var targetPiece2 = board.ChessBoard[Position.Item1][Position.Item2 - 2];
-                    if (targetPiece == null && targetPiece2 == null && !SquareIsUnderAttack((Position.Item1, 1), board) && !SquareIsUnderAttack((Position.Item1, 2), board))
-                    {
-                        ValidTargetPostions.Add((Position.Item1, 2));
-                    }
+                    
                 }
             }
-            for (int dirRow = -1; dirRow <= 1; dirRow++)
+
+            return 0;
+        }
+
+
+
+
+
+
+        
+
+        public bool SquareIsUnderAttack((int, int) position, Board board)
+        {
+            return _attackDetector.IsSquareUnderAttack(new Square(position.Item1, position.Item2), board, Color);
+        }
+
+        private List<Square> CalculateSlidingMoves(Board board, Direction[] directions)
+        {
+            var moves = new List<Square>();
+
+            foreach (var direction in directions)
             {
-                for (int dirCol = -1; dirCol <= 1; dirCol++)
+                for (int step = 1; step < BoardConstants.BoardSize; step++)
                 {
-                    if (dirRow == 0 && dirCol == 0)
-                        continue; // Skip no-move
-                    var targetPos = (Position.Item1 + dirRow, Position.Item2 + dirCol);
-                    if (!IsWithinBounds(targetPos))
-                        continue;
+                    var targetPos = new Square(
+                        Position.Row + direction.RowDelta * step,
+                        Position.Col + direction.ColDelta * step);
 
-                    // Validate if the target square is not under attack
-                    if (SquareIsUnderAttack(targetPos, board))
-                        continue;
+                    if (!targetPos.IsWithinBounds())
+                        break;
 
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
+                    var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
                     if (targetPiece == null)
                     {
-                        ValidTargetPostions.Add(targetPos);
+                        moves.Add(targetPos);
                     }
                     else
                     {
                         if (targetPiece.Color != Color)
-                        {
-                            if (targetPiece.Type == PieceType.King)
-                                continue; // Can't capture opposing king
-                            ValidTargetPostions.Add(targetPos);
-                            // Capture
-                        }
-                    }
-                }
-            }
-        }
-
-        private List<Piece> GetAttackers((int, int) position, Board board)
-        {
-            List<Piece> attackers = new List<Piece>();
-
-            // Check Knight attacks
-            var knightMoves = new List<(int, int)>
-            {
-                (2, 1), (1, 2), (-1, 2), (-2, 1),
-                (-2, -1), (-1, -2), (1, -2), (2, -1)
-            };
-
-            foreach (var move in knightMoves)
-            {
-                var targetPos = (position.Item1 + move.Item1, position.Item2 + move.Item2);
-                if (IsWithinBounds(targetPos))
-                {
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece != null && targetPiece.Color != Color && targetPiece.Type == PieceType.Knight)
-                    {
-                        attackers.Add(targetPiece);
-                    }
-                }
-            }
-
-            // Check straight lines
-            var straightDirections = new List<(int, int)>
-            {
-                (1, 0), (-1, 0), (0, 1), (0, -1)
-            };
-
-            foreach (var direction in straightDirections)
-            {
-                int step = 1;
-                while (true)
-                {
-                    var targetPos = (position.Item1 + step * direction.Item1, position.Item2 + step * direction.Item2);
-                    if (!IsWithinBounds(targetPos))
-                        break;
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece != null)
-                    {
-                        if (targetPiece.Color != Color)
-                        {
-                            if (targetPiece.Type == PieceType.Rook || targetPiece.Type == PieceType.Queen)
-                            {
-                                attackers.Add(targetPiece);
-                            }
-                            else if (targetPiece.Type == PieceType.King && step == 1)
-                            {
-                                attackers.Add(targetPiece);
-                            }
-                        }
+                            moves.Add(targetPos);
                         break; // Blocked by any piece
                     }
-                    step++;
                 }
             }
 
-            // Check diagonals
-            var diagonalDirections = new List<(int, int)>
-            {
-                (1, 1), (1, -1), (-1, 1), (-1, -1)
-            };
-
-            foreach (var direction in diagonalDirections)
-            {
-                int step = 1;
-                while (true)
-                {
-                    var targetPos = (position.Item1 + step * direction.Item1, position.Item2 + step * direction.Item2);
-                    if (!IsWithinBounds(targetPos))
-                        break;
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece != null)
-                    {
-                        if (targetPiece.Color != Color)
-                        {
-                            if (targetPiece.Type == PieceType.Bishop || targetPiece.Type == PieceType.Queen)
-                            {
-                                attackers.Add(targetPiece);
-                            }
-                            else if (targetPiece.Type == PieceType.King && step == 1)
-                            {
-                                attackers.Add(targetPiece);
-                            }
-                            else if (targetPiece.Type == PieceType.Pawn)
-                            {
-                                // Pawns attack diagonally
-                                if ((Color == PlayerColor.White && direction.Item1 == -1) ||
-                                    (Color == PlayerColor.Black && direction.Item1 == 1))
-                                {
-                                    if (step == 1)
-                                        attackers.Add(targetPiece);
-                                }
-                            }
-                        }
-                        break; // Blocked by any piece
-                    }
-                    step++;
-                }
-            }
-
-            return attackers;
+            return moves;
         }
 
-        public bool SquareIsUnderAttack((int, int) position, Board board)
+        private List<Square> CalculateKnightMoves(Board board)
         {
-            // Check Knight attacks
-            var knightMoves = new List<(int, int)>
-            {
-                (2, 1), (1, 2), (-1, 2), (-2, 1),
-                (-2, -1), (-1, -2), (1, -2), (2, -1)
-            };
+            var moves = new List<Square>();
 
-            foreach (var move in knightMoves)
+            foreach (var move in Direction.KnightMoves)
             {
-                var targetPos = (position.Item1 + move.Item1, position.Item2 + move.Item2);
-                if (IsWithinBounds(targetPos))
+                var targetPos = Position + move;
+                if (!targetPos.IsWithinBounds())
+                    continue;
+
+                var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
+                if (targetPiece == null || targetPiece.Color != Color)
                 {
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece != null && targetPiece.Color != Color && targetPiece.Type == PieceType.Knight)
-                    {
-                        return true;
-                    }
+                    moves.Add(targetPos);
                 }
             }
 
-            // Check straight lines
-            var straightDirections = new List<(int, int)>
-            {
-                (1, 0), (-1, 0), (0, 1), (0, -1)
-            };
-
-            foreach (var direction in straightDirections)
-            {
-                int step = 1;
-                while (true)
-                {
-                    var targetPos = (position.Item1 + step * direction.Item1, position.Item2 + step * direction.Item2);
-                    if (!IsWithinBounds(targetPos))
-                        break;
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece != null)
-                    {
-                        if (targetPiece.Color != Color)
-                        {
-                            if (targetPiece.Type == PieceType.Rook || targetPiece.Type == PieceType.Queen)
-                            {
-                                return true;
-                            }
-                            if (targetPiece.Type == PieceType.King && step == 1)
-                            {
-                                return true;
-                            }
-                        }
-                        break; // Blocked by any piece
-                    }
-                    step++;
-                }
-            }
-
-            // Check diagonals
-            var diagonalDirections = new List<(int, int)>
-            {
-                (1, 1), (1, -1), (-1, 1), (-1, -1)
-            };
-
-            foreach (var direction in diagonalDirections)
-            {
-                int step = 1;
-                while (true)
-                {
-                    var targetPos = (position.Item1 + step * direction.Item1, position.Item2 + step * direction.Item2);
-                    if (!IsWithinBounds(targetPos))
-                        break;
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece != null)
-                    {
-                        if (targetPiece.Color != Color)
-                        {
-                            if (targetPiece.Type == PieceType.Bishop || targetPiece.Type == PieceType.Queen)
-                            {
-                                return true;
-                            }
-                            if (targetPiece.Type == PieceType.King && step == 1)
-                            {
-                                return true;
-                            }
-                            if (targetPiece.Type == PieceType.Pawn)
-                            {
-                                // Pawns attack diagonally
-                                if ((Color == PlayerColor.White && direction.Item1 == -1) ||
-                                    (Color == PlayerColor.Black && direction.Item1 == 1))
-                                {
-                                    if (step == 1)
-                                        return true;
-                                }
-                            }
-                        }
-                        break; // Blocked by any piece
-                    }
-                    step++;
-                }
-            }
-
-            return false;
+            return moves;
         }
 
-        private void CalculateQueenMoves(Board board)
+        private List<Square> CalculateKingMoves(Board board)
         {
-            for (int dirRow = -1; dirRow <= 1; dirRow++)
+            var moves = new List<Square>();
+
+            // Normal king moves
+            foreach (var direction in Direction.All)
             {
-                for (int dirCol = -1; dirCol <= 1; dirCol++)
+                var targetPos = Position + direction;
+                if (!targetPos.IsWithinBounds())
+                    continue;
+
+                if (_attackDetector.IsSquareUnderAttack(targetPos, board, Color))
+                    continue;
+
+                var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
+                if (targetPiece == null)
                 {
-                    if (dirRow == 0 && dirCol == 0)
-                        continue; // Skip no-move
-                    int step = 1;
-                    while (true)
-                    {
-                        var targetPos = (Position.Item1 + step * dirRow, Position.Item2 + step * dirCol);
-                        if (!IsWithinBounds(targetPos))
-                            break;
-                        var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                        if (targetPiece == null)
-                        {
-                            ValidTargetPostions.Add(targetPos);
-                        }
-                        else
-                        {
-                            if (targetPiece.Color != Color)
-                            {
-                                ValidTargetPostions.Add(targetPos);
-                                // Capture
-                            }
-                            break; // Blocked by any piece
-                        }
-                        step++;
-                    }
+                    moves.Add(targetPos);
+                }
+                else if (targetPiece.Color != Color && targetPiece.Type != PieceType.King)
+                {
+                    moves.Add(targetPos);
+                }
+            }
+
+            // Castling
+            if (!_attackDetector.IsSquareUnderAttack(Position, board, Color))
+            {
+                AddCastlingMoves(board, moves);
+            }
+
+            return moves;
+        }
+
+        private void AddCastlingMoves(Board board, List<Square> moves)
+        {
+            // Kingside castling
+            if (CanCastleKingside(board))
+            {
+                var passThroughSquare = new Square(Position.Row, 5);
+                var targetSquare = new Square(Position.Row, 6);
+
+                if (IsPathClearForCastling(board, passThroughSquare, targetSquare))
+                {
+                    moves.Add(new Square(Position.Row, 6));
+                }
+            }
+
+            // Queenside castling
+            if (CanCastleQueenside(board))
+            {
+                var passThroughSquare1 = new Square(Position.Row, 3);
+                var passThroughSquare2 = new Square(Position.Row, 2);
+                var extraSquare = new Square(Position.Row, 1);
+
+                if (IsPathClearForCastling(board, passThroughSquare1, passThroughSquare2) &&
+                    board.ChessBoard[extraSquare.Row][extraSquare.Col] == null)
+                {
+                    moves.Add(new Square(Position.Row, 2));
                 }
             }
         }
 
-        private void CalculateBishopMoves(Board board)
+        private bool CanCastleKingside(Board board)
         {
-            for (int dirRow = -1; dirRow <= 1; dirRow++)
-            {
-                for (int dirCol = -1; dirCol <= 1; dirCol++)
-                {
-                    if (Math.Abs(dirRow) + Math.Abs(dirCol) != 2)
-                        continue; // Skip non-diagonals
-                    int step = 1;
-                    while (true)
-                    {
-                        var targetPos = (Position.Item1 + step * dirRow, Position.Item2 + step * dirCol);
-                        if (!IsWithinBounds(targetPos))
-                            break;
-                        var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                        if (targetPiece == null)
-                        {
-                            ValidTargetPostions.Add(targetPos);
-                        }
-                        else
-                        {
-                            if (targetPiece.Color != Color)
-                            {
-                                ValidTargetPostions.Add(targetPos);
-                                // Capture
-                            }
-                            break; // Blocked by any piece
-                        }
-                        step++;
-                    }
-                }
-            }
+            return (Color == PlayerColor.White && board.CastleRights.Contains(KastleRights.WhiteKingside)) ||
+                   (Color == PlayerColor.Black && board.CastleRights.Contains(KastleRights.BlackKingside));
         }
 
-        private void CalculateKnightMoves(Board board)
+        private bool CanCastleQueenside(Board board)
         {
-            var knightMoves = new List<(int, int)>
-            {
-                (2, 1), (1, 2), (-1, 2), (-2, 1),
-                (-2, -1), (-1, -2), (1, -2), (2, -1)
-            };
-
-            foreach (var move in knightMoves)
-            {
-                var targetPos = (Position.Item1 + move.Item1, Position.Item2 + move.Item2);
-                if (IsWithinBounds(targetPos))
-                {
-                    var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                    if (targetPiece == null)
-                    {
-                        ValidTargetPostions.Add(targetPos);
-                    }
-                    else if (targetPiece != null && targetPiece.Color != Color)
-                    {
-                        ValidTargetPostions.Add(targetPos);
-                    }
-                }
-            }
+            return (Color == PlayerColor.White && board.CastleRights.Contains(KastleRights.WhiteQueenside)) ||
+                   (Color == PlayerColor.Black && board.CastleRights.Contains(KastleRights.BlackQueenside));
         }
 
-        private void CalculateRookMoves(Board board)
+        private bool IsPathClearForCastling(Board board, params Square[] squares)
         {
-            for (int dirRow = -1; dirRow <= 1; dirRow++)
+            foreach (var square in squares)
             {
-                for (int dirCol = -1; dirCol <= 1; dirCol++)
-                {
-                    if (Math.Abs(dirRow) + Math.Abs(dirCol) != 1)
-                        continue; // Skip diagonals and no-move
-                    int step = 1;
-                    while (true)
-                    {
-                        var targetPos = (Position.Item1 + step * dirRow, Position.Item2 + step * dirCol);
-                        if (!IsWithinBounds(targetPos))
-                            break;
-                        var targetPiece = board.ChessBoard[targetPos.Item1][targetPos.Item2];
-                        if (targetPiece == null)
-                        {
-                            ValidTargetPostions.Add(targetPos);
-                        }
-                        else
-                        {
-                            if (targetPiece.Color != Color)
-                            {
-                                ValidTargetPostions.Add(targetPos);
-                                // Capture
-                            }
-                            break; // Blocked by any piece
-                        }
-                        step++;
-                    }
-                }
+                if (board.ChessBoard[square.Row][square.Col] != null)
+                    return false;
+
+                if (_attackDetector.IsSquareUnderAttack(square, board, Color))
+                    return false;
             }
+            return true;
         }
 
-        private void CalculatePawnMoves(Board board)
+        private List<Square> CalculatePawnMoves(Board board)
         {
-            // Pawns move differently based on color
+            var moves = new List<Square>();
             int direction = Color == PlayerColor.White ? -1 : 1;
-            int startRow = Color == PlayerColor.White ? 6 : 1;
+            int startRow = Color == PlayerColor.White
+                ? BoardConstants.WhitePawnStartRank
+                : BoardConstants.BlackPawnStartRank;
 
-            // Single square move
-            var forwardPos = (Position.Item1 + direction, Position.Item2);
-            if (IsWithinBounds(forwardPos) && board.ChessBoard[forwardPos.Item1][forwardPos.Item2] == null)
-            {
-                ValidTargetPostions.Add(forwardPos);
-                // Double square move from starting position
-                if (Position.Item1 == startRow)
-                {
-                    var doubleForwardPos = (Position.Item1 + 2 * direction, Position.Item2);
-                    if (board.ChessBoard[doubleForwardPos.Item1][doubleForwardPos.Item2] == null)
-                    {
-                        ValidTargetPostions.Add(doubleForwardPos);
-                    }
-                }
-            }
+            // Forward moves
+            AddPawnForwardMoves(board, moves, direction, startRow);
 
             // Captures
-            var captureOffsets = new List<(int, int)> { (direction, -1), (direction, 1) };
-            foreach (var offset in captureOffsets)
-            {
-                var capturePos = (Position.Item1 + offset.Item1, Position.Item2 + offset.Item2);
-                if (IsWithinBounds(capturePos))
-                {
-                    var targetPiece = board.ChessBoard[capturePos.Item1][capturePos.Item2];
-                    if (targetPiece != null && targetPiece.Color != Color)
-                    {
-                        ValidTargetPostions.Add(capturePos);
-                    }
+            AddPawnCaptures(board, moves, direction);
 
-                    if (board.EnPassantTargetSquare != null &&
-                       capturePos == board.EnPassantTargetSquare)
-                    {
-                        ValidTargetPostions.Add(capturePos);
-                    }
+            return moves;
+        }
+
+        private void AddPawnForwardMoves(Board board, List<Square> moves, int direction, int startRow)
+        {
+            var forwardPos = new Square(Position.Row + direction, Position.Col);
+
+            if (!forwardPos.IsWithinBounds() || board.ChessBoard[forwardPos.Row][forwardPos.Col] != null)
+                return;
+
+            moves.Add(forwardPos);
+
+            // Double move from starting position
+            if (Position.Row == startRow)
+            {
+                var doubleForwardPos = new Square(Position.Row + 2 * direction, Position.Col);
+                if (board.ChessBoard[doubleForwardPos.Row][doubleForwardPos.Col] == null)
+                {
+                    moves.Add(doubleForwardPos);
                 }
             }
         }
 
-        private bool IsWithinBounds((int, int) position)
+        private void AddPawnCaptures(Board board, List<Square> moves, int direction)
         {
-            return position.Item1 >= 0 && position.Item1 < 8 && position.Item2 >= 0 && position.Item2 < 8;
+            var captureDirections = new[] { new Direction(direction, -1), new Direction(direction, 1) };
+
+            foreach (var captureDir in captureDirections)
+            {
+                var capturePos = Position + captureDir;
+
+                if (!capturePos.IsWithinBounds())
+                    continue;
+
+                var targetPiece = board.ChessBoard[capturePos.Row][capturePos.Col];
+
+                // Normal capture
+                if (targetPiece != null && targetPiece.Color != Color)
+                {
+                    moves.Add(capturePos);
+                }
+
+                // En passant
+                if (board.EnPassantTargetSquare != null &&
+                    capturePos.Row == board.EnPassantTargetSquare.Value.Item1 &&
+                    capturePos.Col == board.EnPassantTargetSquare.Value.Item2)
+                {
+                    moves.Add(capturePos);
+                }
+            }
         }
     }
 }

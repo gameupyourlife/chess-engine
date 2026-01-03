@@ -1,12 +1,10 @@
 ﻿using chess_engine.commands;
 using chess_engine.game;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace chess_engine
 {
-    enum InputCommand
+    internal enum InputCommand
     {
         UCI,
         DEBUG,
@@ -18,11 +16,9 @@ namespace chess_engine
         QUIT,
         STOP,
     }
+
     internal class IOService
     {
-
-        public IOService() { }
-
         public string GetInput()
         {
             return Console.ReadLine() ?? string.Empty;
@@ -46,7 +42,7 @@ namespace chess_engine
             };
         }
 
-        public (InputCommand, string)? ProcessInput(string input)
+        public (InputCommand Command, string Input)? ProcessInput(string input)
         {
             var command = ParseInput(input);
             if (command == null)
@@ -54,27 +50,27 @@ namespace chess_engine
                 Console.WriteLine("Unknown command");
                 return null;
             }
-            return ((InputCommand, string)?)(command, input);
+            return (command.Value, input);
         }
 
         public void StartListening(CommandHandler handler)
         {
-            
             while (true)
             {
                 string input = GetInput();
-                (InputCommand, string)? processed = ProcessInput(input);
+                var processed = ProcessInput(input);
 
-                if (processed is null) continue;
+                if (processed is null)
+                    continue;
 
-                handler.HandleCommand(processed.Value.Item1, processed.Value.Item2);
+                handler.HandleCommand(processed.Value.Command, processed.Value.Input);
             }
         }
 
-        public void SendBestMove(((int, int), (int, int), PieceType?) move)
+        public void SendBestMove(((int, int) From, (int, int) To, PieceType? PromotionPiece) move)
         {
-            string fromAlgebraic = PositionCommandHandler.ConvertCoordinatesToAlgebraic(move.Item1, move.Item2, move.Item3);
-            Console.WriteLine($"bestmove {fromAlgebraic}");
+            string algebraic = PositionCommandHandler.ToAlgebraicNotation(move.From, move.To, move.PromotionPiece);
+            Console.WriteLine($"bestmove {algebraic}");
         }
 
         public void SendOutput(string output)

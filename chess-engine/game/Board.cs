@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace chess_engine.game
 {
@@ -20,12 +19,12 @@ namespace chess_engine.game
 
     internal class MoveHistory
     {
-        public (int, int) From { get; set; }
-        public (int, int) To { get; set; }
-        public Piece MovedPiece { get; set; }
+        public Square From { get; set; }
+        public Square To { get; set; }
+        public Piece MovedPiece { get; set; } = null!;
         public Piece? CapturedPiece { get; set; }
-        public (int, int)? PreviousEnPassantSquare { get; set; }
-        public List<KastleRights> PreviousCastleRights { get; set; }
+        public Square? PreviousEnPassantSquare { get; set; }
+        public List<KastleRights> PreviousCastleRights { get; set; } = [];
         public int PreviousHalfmoveClock { get; set; }
         public int PreviousFullmoveNumber { get; set; }
         public PlayerColor PreviousActiveColor { get; set; }
@@ -35,18 +34,19 @@ namespace chess_engine.game
 
     internal class Board
     {
-        //public List<Piece> Pieces { get; private set; } = new List<Piece>();
-        public List<List<Piece?>> ChessBoard {  get; set; } = new List<List<Piece?>>();
+        private static readonly AttackDetector _attackDetector = new();
+
+        public List<List<Piece?>> ChessBoard { get; set; } = [];
 
         public PlayerColor ActiveColor { get; private set; } = PlayerColor.White;
 
-        public List<KastleRights> CastleRights { get; private set; } = new List<KastleRights>()
-        {
+        public List<KastleRights> CastleRights { get; private set; } =
+        [
             KastleRights.WhiteKingside,
             KastleRights.WhiteQueenside,
             KastleRights.BlackKingside,
             KastleRights.BlackQueenside
-        };
+        ];
 
         public (int, int)? EnPassantTargetSquare { get; private set; } = null;
 
@@ -57,74 +57,57 @@ namespace chess_engine.game
 
         public bool Check { get; set; } = false;
 
-        private Stack<MoveHistory> moveHistoryStack = new Stack<MoveHistory>();
+        private readonly Stack<MoveHistory> _moveHistoryStack = new();
 
         public Board(string fenString)
         {
             LoadFromFEN(fenString);
-
         }
 
         public void UndoMove()
         {
-            if (moveHistoryStack.Count == 0)
+            if (_moveHistoryStack.Count == 0)
             {
                 throw new InvalidOperationException("No moves to undo");
             }
 
-            MoveHistory lastMove = moveHistoryStack.Pop();
+            MoveHistory lastMove = _moveHistoryStack.Pop();
 
             // Handle promotion undo - restore pawn
             if (lastMove.PromotedFrom.HasValue)
             {
                 Piece pawn = new Piece(lastMove.PromotedFrom.Value, lastMove.MovedPiece.Color, lastMove.From);
-                ChessBoard[lastMove.From.Item1][lastMove.From.Item2] = pawn;
+                ChessBoard[lastMove.From.Row][lastMove.From.Col] = pawn;
             }
             else
             {
                 // Restore the moved piece to its original position
-                ChessBoard[lastMove.From.Item1][lastMove.From.Item2] = lastMove.MovedPiece;
+                ChessBoard[lastMove.From.Row][lastMove.From.Col] = lastMove.MovedPiece;
                 lastMove.MovedPiece.Position = lastMove.From;
             }
 
             // Handle castling undo
             if (lastMove.MovedPiece.Type == PieceType.King)
             {
-                int columnDiff = lastMove.To.Item2 - lastMove.From.Item2;
-                
-                // Undo kingside castle
-                if (columnDiff == 2)
-                {
-                    Piece rook = ChessBoard[lastMove.From.Item1][5] ?? throw new Exception("Rook not found for undoing castling");
-                    ChessBoard[lastMove.From.Item1][5] = null;
-                    ChessBoard[lastMove.From.Item1][7] = rook;
-                    rook.Position = (lastMove.From.Item1, 7);
-                }
-                // Undo queenside castle
-                else if (columnDiff == -2)
-                {
-                    Piece rook = ChessBoard[lastMove.From.Item1][3] ?? throw new Exception("Rook not found for undoing castling");
-                    ChessBoard[lastMove.From.Item1][3] = null;
-                    ChessBoard[lastMove.From.Item1][0] = rook;
-                    rook.Position = (lastMove.From.Item1, 0);
-                }
+                UndoCastling(lastMove);
             }
 
             // Handle en passant undo
-            if (lastMove.MovedPiece.Type == PieceType.Pawn && 
-                lastMove.PreviousEnPassantSquare != null && 
+            if (lastMove.MovedPiece.Type == PieceType.Pawn &&
+                lastMove.PreviousEnPassantSquare != null &&
                 lastMove.To == lastMove.PreviousEnPassantSquare)
             {
-                // This was an en passant capture
-                // Restore the captured pawn to its actual position
-                int capturedPawnRow = lastMove.MovedPiece.Color == PlayerColor.White ? lastMove.To.Item1 + 1 : lastMove.To.Item1 - 1;
-                ChessBoard[capturedPawnRow][lastMove.To.Item2] = lastMove.CapturedPiece;
-                ChessBoard[lastMove.To.Item1][lastMove.To.Item2] = null;
+                // This was an en passant capture - restore the captured pawn
+                int capturedPawnRow = lastMove.MovedPiece.Color == PlayerColor.White
+                    ? lastMove.To.Row + 1
+                    : lastMove.To.Row - 1;
+                ChessBoard[capturedPawnRow][lastMove.To.Col] = lastMove.CapturedPiece;
+                ChessBoard[lastMove.To.Row][lastMove.To.Col] = null;
             }
             else
             {
                 // Normal move - restore captured piece (if any) to target square
-                ChessBoard[lastMove.To.Item1][lastMove.To.Item2] = lastMove.CapturedPiece;
+                ChessBoard[lastMove.To.Row][lastMove.To.Col] = lastMove.CapturedPiece;
             }
 
             // Restore board state
@@ -136,18 +119,45 @@ namespace chess_engine.game
             Check = lastMove.PreviousCheckState;
         }
 
-        public void MakeMove((int, int) from, (int, int) to, PieceType? promotionPiece = null)
+        private void UndoCastling(MoveHistory lastMove)
         {
-            Piece movedPiece = ChessBoard[from.Item1][from.Item2] ?? throw new Exception("Tried to move from a field with no Piece");
-            Piece? capturedPiece = ChessBoard[to.Item1][to.Item2];
+            int columnDiff = lastMove.To.Col - lastMove.From.Col;
 
-            MoveHistory history = new MoveHistory
+            // Undo kingside castle
+            if (columnDiff == 2)
+            {
+                Piece rook = ChessBoard[lastMove.From.Row][5]
+                    ?? throw new Exception("Rook not found for undoing castling");
+                ChessBoard[lastMove.From.Row][5] = null;
+                ChessBoard[lastMove.From.Row][7] = rook;
+                rook.Position = new Square(lastMove.From.Row, 7);
+            }
+            // Undo queenside castle
+            else if (columnDiff == -2)
+            {
+                Piece rook = ChessBoard[lastMove.From.Row][3]
+                    ?? throw new Exception("Rook not found for undoing castling");
+                ChessBoard[lastMove.From.Row][3] = null;
+                ChessBoard[lastMove.From.Row][0] = rook;
+                rook.Position = new Square(lastMove.From.Row, 0);
+            }
+        }
+
+        public void MakeMove(Square from, Square to, PieceType? promotionPiece = null)
+        {
+            Piece movedPiece = ChessBoard[from.Row][from.Col]
+                ?? throw new Exception("Tried to move from a field with no Piece");
+            Piece? capturedPiece = ChessBoard[to.Row][to.Col];
+
+            MoveHistory history = new()
             {
                 From = from,
                 To = to,
                 MovedPiece = movedPiece,
                 CapturedPiece = capturedPiece,
-                PreviousEnPassantSquare = EnPassantTargetSquare,
+                PreviousEnPassantSquare = EnPassantTargetSquare.HasValue
+                    ? new Square(EnPassantTargetSquare.Value.Item1, EnPassantTargetSquare.Value.Item2)
+                    : null,
                 PreviousCastleRights = new List<KastleRights>(CastleRights),
                 PreviousHalfmoveClock = HalfmoveClock,
                 PreviousFullmoveNumber = FullmoveNumber,
@@ -156,116 +166,159 @@ namespace chess_engine.game
                 PromotedFrom = null
             };
 
-            moveHistoryStack.Push(history);
+            _moveHistoryStack.Push(history);
 
-            // Handle castling
-            if (movedPiece.Type == PieceType.King)
-            {
-                int columnDiff = to.Item2 - from.Item2;
-                
-                // Kingside castle
-                if (columnDiff == 2)
-                {
-                    // Move the rook
-                    Piece rook = ChessBoard[from.Item1][7] ?? throw new Exception("Rook not found for castling");
-                    ChessBoard[from.Item1][7] = null;
-                    ChessBoard[from.Item1][5] = rook;
-                    rook.Position = (from.Item1, 5);
-                }
-                // Queenside castle
-                else if (columnDiff == -2)
-                {
-                    // Move the rook
-                    Piece rook = ChessBoard[from.Item1][0] ?? throw new Exception("Rook not found for castling");
-                    ChessBoard[from.Item1][0] = null;
-                    ChessBoard[from.Item1][3] = rook;
-                    rook.Position = (from.Item1, 3);
-                }
-
-                // Remove castling rights for this color
-                if (movedPiece.Color == PlayerColor.White)
-                {
-                    CastleRights.Remove(KastleRights.WhiteKingside);
-                    CastleRights.Remove(KastleRights.WhiteQueenside);
-                }
-                else
-                {
-                    CastleRights.Remove(KastleRights.BlackKingside);
-                    CastleRights.Remove(KastleRights.BlackQueenside);
-                }
-            }
-
-            // Remove castling rights if rook moves or is captured
-            if (movedPiece.Type == PieceType.Rook)
-            {
-                if (movedPiece.Color == PlayerColor.White)
-                {
-                    if (from.Item2 == 0) CastleRights.Remove(KastleRights.WhiteQueenside);
-                    if (from.Item2 == 7) CastleRights.Remove(KastleRights.WhiteKingside);
-                }
-                else
-                {
-                    if (from.Item2 == 0) CastleRights.Remove(KastleRights.BlackQueenside);
-                    if (from.Item2 == 7) CastleRights.Remove(KastleRights.BlackKingside);
-                }
-            }
-
-            // Remove castling rights if rook is captured
-            if (capturedPiece != null && capturedPiece.Type == PieceType.Rook)
-            {
-                if (capturedPiece.Color == PlayerColor.White)
-                {
-                    if (to.Item2 == 0) CastleRights.Remove(KastleRights.WhiteQueenside);
-                    if (to.Item2 == 7) CastleRights.Remove(KastleRights.WhiteKingside);
-                }
-                else
-                {
-                    if (to.Item2 == 0) CastleRights.Remove(KastleRights.BlackQueenside);
-                    if (to.Item2 == 7) CastleRights.Remove(KastleRights.BlackKingside);
-                }
-            }
-
-            // Handle en passant capture
-            bool isEnPassantCapture = false;
-            if (movedPiece.Type == PieceType.Pawn && EnPassantTargetSquare != null && to == EnPassantTargetSquare)
-            {
-                isEnPassantCapture = true;
-                // Capture the pawn that is not on the target square
-                int capturedPawnRow = movedPiece.Color == PlayerColor.White ? to.Item1 + 1 : to.Item1 - 1;
-                capturedPiece = ChessBoard[capturedPawnRow][to.Item2];
-                ChessBoard[capturedPawnRow][to.Item2] = null;
-                // Store the actual captured piece in history for undo
-                history.CapturedPiece = capturedPiece;
-            }
-
-            // Clear en passant square
-            EnPassantTargetSquare = null;
-
-            // Set new en passant square if pawn moved two squares
-            if (movedPiece.Type == PieceType.Pawn && Math.Abs(to.Item1 - from.Item1) == 2)
-            {
-                EnPassantTargetSquare = ((from.Item1 + to.Item1) / 2, from.Item2);
-            }
+            // Handle special moves
+            HandleCastling(movedPiece, from, to);
+            UpdateCastlingRights(movedPiece, capturedPiece, from, to);
+            capturedPiece = HandleEnPassant(movedPiece, to, capturedPiece, history);
+            UpdateEnPassantSquare(movedPiece, from, to);
 
             // Move the piece
-            ChessBoard[from.Item1][from.Item2] = null;
+            ChessBoard[from.Row][from.Col] = null;
             movedPiece.Position = to;
-            ChessBoard[to.Item1][to.Item2] = movedPiece;
+            ChessBoard[to.Row][to.Col] = movedPiece;
 
             // Handle pawn promotion
-            if (movedPiece.Type == PieceType.Pawn)
+            HandlePromotion(movedPiece, to, promotionPiece, history);
+
+            // Update clocks
+            UpdateClocks(movedPiece, capturedPiece);
+
+            // Switch active color
+            ActiveColor = ActiveColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
+
+            // Update check status
+            UpdateCheckStatus();
+        }
+
+        // Backward compatibility overload
+        public void MakeMove((int, int) from, (int, int) to, PieceType? promotionPiece = null)
+        {
+            MakeMove(new Square(from.Item1, from.Item2), new Square(to.Item1, to.Item2), promotionPiece);
+        }
+
+        private void HandleCastling(Piece movedPiece, Square from, Square to)
+        {
+            if (movedPiece.Type != PieceType.King)
+                return;
+
+            int columnDiff = to.Col - from.Col;
+
+            // Kingside castle
+            if (columnDiff == 2)
             {
-                int promotionRank = movedPiece.Color == PlayerColor.White ? 0 : 7;
-                if (to.Item1 == promotionRank)
-                {
-                    history.PromotedFrom = PieceType.Pawn;
-                    PieceType newPieceType = promotionPiece ?? PieceType.Queen; // Default to queen
-                    Piece promotedPiece = new Piece(newPieceType, movedPiece.Color, to);
-                    ChessBoard[to.Item1][to.Item2] = promotedPiece;
-                }
+                Piece rook = ChessBoard[from.Row][7]
+                    ?? throw new Exception("Rook not found for castling");
+                ChessBoard[from.Row][7] = null;
+                ChessBoard[from.Row][5] = rook;
+                rook.Position = new Square(from.Row, 5);
+            }
+            // Queenside castle
+            else if (columnDiff == -2)
+            {
+                Piece rook = ChessBoard[from.Row][0]
+                    ?? throw new Exception("Rook not found for castling");
+                ChessBoard[from.Row][0] = null;
+                ChessBoard[from.Row][3] = rook;
+                rook.Position = new Square(from.Row, 3);
+            }
+        }
+
+        private void UpdateCastlingRights(Piece movedPiece, Piece? capturedPiece, Square from, Square to)
+        {
+            // King moves - lose all castling rights for that color
+            if (movedPiece.Type == PieceType.King)
+            {
+                RemoveCastlingRights(movedPiece.Color);
             }
 
-            // Update halfmove clock
+            // Rook moves
+            if (movedPiece.Type == PieceType.Rook)
+            {
+                RemoveRookCastlingRights(movedPiece.Color, from.Col);
+            }
+
+            // Rook captured
+            if (capturedPiece?.Type == PieceType.Rook)
+            {
+                RemoveRookCastlingRights(capturedPiece.Color, to.Col);
+            }
+        }
+
+        private void RemoveCastlingRights(PlayerColor color)
+        {
+            if (color == PlayerColor.White)
+            {
+                CastleRights.Remove(KastleRights.WhiteKingside);
+                CastleRights.Remove(KastleRights.WhiteQueenside);
+            }
+            else
+            {
+                CastleRights.Remove(KastleRights.BlackKingside);
+                CastleRights.Remove(KastleRights.BlackQueenside);
+            }
+        }
+
+        private void RemoveRookCastlingRights(PlayerColor color, int column)
+        {
+            if (color == PlayerColor.White)
+            {
+                if (column == 0) CastleRights.Remove(KastleRights.WhiteQueenside);
+                if (column == 7) CastleRights.Remove(KastleRights.WhiteKingside);
+            }
+            else
+            {
+                if (column == 0) CastleRights.Remove(KastleRights.BlackQueenside);
+                if (column == 7) CastleRights.Remove(KastleRights.BlackKingside);
+            }
+        }
+
+        private Piece? HandleEnPassant(Piece movedPiece, Square to, Piece? capturedPiece, MoveHistory history)
+        {
+            if (movedPiece.Type != PieceType.Pawn || EnPassantTargetSquare == null)
+                return capturedPiece;
+
+            if (to.Row != EnPassantTargetSquare.Value.Item1 || to.Col != EnPassantTargetSquare.Value.Item2)
+                return capturedPiece;
+
+            // Capture the pawn that is not on the target square
+            int capturedPawnRow = movedPiece.Color == PlayerColor.White ? to.Row + 1 : to.Row - 1;
+            capturedPiece = ChessBoard[capturedPawnRow][to.Col];
+            ChessBoard[capturedPawnRow][to.Col] = null;
+            history.CapturedPiece = capturedPiece;
+
+            return capturedPiece;
+        }
+
+        private void UpdateEnPassantSquare(Piece movedPiece, Square from, Square to)
+        {
+            EnPassantTargetSquare = null;
+
+            if (movedPiece.Type == PieceType.Pawn && Math.Abs(to.Row - from.Row) == 2)
+            {
+                EnPassantTargetSquare = ((from.Row + to.Row) / 2, from.Col);
+            }
+        }
+
+        private void HandlePromotion(Piece movedPiece, Square to, PieceType? promotionPiece, MoveHistory history)
+        {
+            if (movedPiece.Type != PieceType.Pawn)
+                return;
+
+            int promotionRank = BoardConstants.GetPromotionRank(movedPiece.Color);
+            if (to.Row != promotionRank)
+                return;
+
+            history.PromotedFrom = PieceType.Pawn;
+            PieceType newPieceType = promotionPiece ?? PieceType.Queen;
+            Piece promotedPiece = new Piece(newPieceType, movedPiece.Color, to);
+            ChessBoard[to.Row][to.Col] = promotedPiece;
+        }
+
+        private void UpdateClocks(Piece movedPiece, Piece? capturedPiece)
+        {
+            // Reset halfmove clock on pawn move or capture
             if (movedPiece.Type == PieceType.Pawn || capturedPiece != null)
             {
                 HalfmoveClock = 0;
@@ -275,23 +328,25 @@ namespace chess_engine.game
                 HalfmoveClock++;
             }
 
-            // Update fullmove number
+            // Increment fullmove number after Black's move
             if (ActiveColor == PlayerColor.Black)
             {
                 FullmoveNumber++;
             }
+        }
 
-            // Switch active color
-            ActiveColor = ActiveColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
-
-            // Check if the king is in check
-            foreach (var field in ChessBoard)
+        private void UpdateCheckStatus()
+        {
+            for (int row = 0; row < BoardConstants.BoardSize; row++)
             {
-                foreach (var piece in field)
+                for (int col = 0; col < BoardConstants.BoardSize; col++)
                 {
-                    if (piece is null || piece.Type != PieceType.King || piece.Color != OurColor) continue;
-                    Check = piece.SquareIsUnderAttack(piece.Position, this);
-                    return;
+                    var piece = ChessBoard[row][col];
+                    if (piece?.Type == PieceType.King && piece.Color == OurColor)
+                    {
+                        Check = _attackDetector.IsSquareUnderAttack(piece.Position, this, OurColor);
+                        return;
+                    }
                 }
             }
         }
@@ -299,86 +354,61 @@ namespace chess_engine.game
         private void LoadFromFEN(string fenString)
         {
             string[] parts = fenString.Split(' ');
-            if (parts.Length < 1)
+            if (parts.Length < 6)
             {
                 throw new ArgumentException("Invalid FEN string");
             }
 
-
-
-            HandlePieces(parts[0]);
-            HandlePlayerColor(parts[1]);
-            HandleCastle(parts[2]);
-            HandleEnPassant(parts[3]);
-            HandleHalfTurns(parts[4]);
-            HandleFullTurns(parts[5]);
+            ParsePieces(parts[0]);
+            ParseActiveColor(parts[1]);
+            ParseCastlingRights(parts[2]);
+            ParseEnPassant(parts[3]);
+            ParseHalfmoveClock(parts[4]);
+            ParseFullmoveNumber(parts[5]);
         }
 
-        private void HandleCastle(string v)
+        private void ParseCastlingRights(string castling)
         {
             CastleRights.Clear();
-            if (v.Contains('K'))
-            {
-                CastleRights.Add(KastleRights.WhiteKingside);
-            }
-            if (v.Contains('Q'))
-            {
-                CastleRights.Add(KastleRights.WhiteQueenside);
-            }
-            if (v.Contains('k'))
-            {
-                CastleRights.Add(KastleRights.BlackKingside);
-            }
-            if (v.Contains('q'))
-            {
-                CastleRights.Add(KastleRights.BlackQueenside);
-            }
+            if (castling.Contains('K')) CastleRights.Add(KastleRights.WhiteKingside);
+            if (castling.Contains('Q')) CastleRights.Add(KastleRights.WhiteQueenside);
+            if (castling.Contains('k')) CastleRights.Add(KastleRights.BlackKingside);
+            if (castling.Contains('q')) CastleRights.Add(KastleRights.BlackQueenside);
         }
 
-        private void HandleEnPassant(string v)
+        private void ParseEnPassant(string enPassant)
         {
-            if (v == "-")
+            if (enPassant == "-")
             {
                 EnPassantTargetSquare = null;
             }
             else
             {
-                char fileChar = v[0];
-                char rankChar = v[1];
-                int file = fileChar - 'a';
-                int rank = rankChar - '1';
+                int file = enPassant[0] - 'a';
+                int rank = enPassant[1] - '1';
                 EnPassantTargetSquare = (file, rank);
             }
         }
 
-        private void HandleHalfTurns(string v)
+        private void ParseHalfmoveClock(string halfmoves)
         {
-            int halfmoves = int.Parse(v);
-            HalfmoveClock = halfmoves;
+            HalfmoveClock = int.Parse(halfmoves);
         }
 
-        private void HandleFullTurns(string v)
+        private void ParseFullmoveNumber(string fullmoves)
         {
-            int fullMoves = int.Parse(v);
-            FullmoveNumber = fullMoves;
+            FullmoveNumber = int.Parse(fullmoves);
         }
 
-        private void HandlePlayerColor(string v)
+        private void ParseActiveColor(string color)
         {
-            if (v == "b")
-            {
-                ActiveColor = PlayerColor.Black;
-            }
-            else
-            {
-                ActiveColor = PlayerColor.White;
-            }
-            }
+            ActiveColor = color == "b" ? PlayerColor.Black : PlayerColor.White;
+        }
 
-        private void HandlePieces(string line)
+        private void ParsePieces(string piecePlacement)
         {
-            string[] rows = line.Split('/');
-            if (rows.Length != 8)
+            string[] rows = piecePlacement.Split('/');
+            if (rows.Length != BoardConstants.BoardSize)
             {
                 throw new ArgumentException("Invalid FEN string: incorrect number of rows");
             }
@@ -386,34 +416,39 @@ namespace chess_engine.game
             ChessBoard.Clear();
             for (int row = 0; row < rows.Length; row++)
             {
-                List<Piece?> rowPieces = [.. Enumerable.Repeat<Piece?>(null, 8)];
+                List<Piece?> rowPieces = [.. Enumerable.Repeat<Piece?>(null, BoardConstants.BoardSize)];
 
                 int column = 0;
                 foreach (char c in rows[row])
                 {
                     if (char.IsDigit(c))
                     {
-                        column += (c - '0');
+                        column += c - '0';
                     }
                     else
                     {
                         PlayerColor color = char.IsUpper(c) ? PlayerColor.White : PlayerColor.Black;
-                        PieceType type = c.ToString().ToLower() switch
-                        {
-                            "p" => PieceType.Pawn,
-                            "r" => PieceType.Rook,
-                            "n" => PieceType.Knight,
-                            "b" => PieceType.Bishop,
-                            "q" => PieceType.Queen,
-                            "k" => PieceType.King,
-                            _ => throw new ArgumentException($"Invalid piece character: {c}")
-                        };
+                        PieceType type = ParsePieceType(c);
                         rowPieces[column] = new Piece(type, color, (row, column));
                         column++;
                     }
                 }
                 ChessBoard.Add(rowPieces);
             }
+        }
+
+        private static PieceType ParsePieceType(char c)
+        {
+            return char.ToLower(c) switch
+            {
+                'p' => PieceType.Pawn,
+                'r' => PieceType.Rook,
+                'n' => PieceType.Knight,
+                'b' => PieceType.Bishop,
+                'q' => PieceType.Queen,
+                'k' => PieceType.King,
+                _ => throw new ArgumentException($"Invalid piece character: {c}")
+            };
         }
     }
 }
