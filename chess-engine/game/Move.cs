@@ -1,3 +1,7 @@
+using chess_engine.commands;
+using System.Xml.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
 namespace chess_engine.game
 {
     /// <summary>
@@ -22,6 +26,11 @@ namespace chess_engine.game
         public Move((int, int) from, (int, int) to, PieceType? promotionPiece = null)
             : this(new Square(from.Item1, from.Item2), new Square(to.Item1, to.Item2), promotionPiece)
         {
+        }
+
+        public override string ToString()
+        {
+            return PositionCommandHandler.ToAlgebraicNotation(this);
         }
     }
 }

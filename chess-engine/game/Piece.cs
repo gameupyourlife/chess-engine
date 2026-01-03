@@ -34,6 +34,20 @@
             Position = new Square(position.Item1, position.Item2);
         }
 
+        public int GetPieceValue()
+        {
+            return Type switch
+            {
+                PieceType.Pawn => 100,
+                PieceType.Knight => 320,
+                PieceType.Bishop => 330,
+                PieceType.Rook => 500,
+                PieceType.Queen => 900,
+                PieceType.King => 2000000,
+                _ => 0,
+            };
+        }
+
         public void CalculateValidTargetPositions(Board board, bool reUsePrecalculated = false)
         {
             ValidTargetPositions = Type switch
@@ -66,12 +80,30 @@
 
         private int CalculateKnightPositionScore(Board board)
         {
-            return 0;
+            int score = 0;
+            var moves = new List<Square>();
+
+            foreach (var move in Direction.KnightMoves)
+            {
+                var targetPos = Position + move;
+                if (!targetPos.IsWithinBounds())
+                    continue;
+
+                var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
+                if (targetPiece != null && targetPiece.Color == Color)
+                {
+                    score += (int)Math.Round(targetPiece.GetPieceValue() * 0.01);
+                }
+            }
+
+
+
+            return score;
         }
 
         private int CalculatePawnPositionScore(Board board)
         {
-            return 0;
+            int score = 0;
             int direction = Color == PlayerColor.White ? -1 : 1;
             var captureDirections = new[] { new Direction(direction, -1), new Direction(direction, 1) };
 
@@ -84,22 +116,35 @@
 
                 var targetPiece = board.ChessBoard[protectionPos.Row][protectionPos.Col];
 
-                // Normal capture
                 if (targetPiece != null && targetPiece.Color == Color)
                 {
-                    
+                    score += targetPiece.Type switch
+                    {
+                        PieceType.King => 0,
+                        PieceType.Pawn => (int)Math.Round(targetPiece.GetPieceValue() * 0.05),
+                        _ => (int)Math.Round(targetPiece.GetPieceValue() * 0.01),
+                    };
                 }
             }
 
-            return 0;
+            var pieceChessBoardScores = new int[][]
+            {
+                [ 60, 60, 60, 60, 60, 60, 60, 60],
+                [  5,  6,  7,  8,  8,  7,  6,  5],
+                [4,5,6,7,7,6,5,4],
+                [3,4,10,20,20,10,4,3],
+                [2, 3, 10, 20, 20, 10, 3, 2],
+                [1, 2, 7, 7, 7,7,2,1],
+                [0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0],
+            };
+
+            int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;
+            score += pieceChessBoardScores[colorCorrectedRow][Position.Col];
+
+
+            return score;
         }
-
-
-
-
-
-
-        
 
         public bool SquareIsUnderAttack((int, int) position, Board board)
         {

@@ -18,7 +18,24 @@ namespace chess_engine.engine
 
         private int EvaluatePiecePositionScores(Board board, PlayerColor evaluatingColor)
         {
-            throw new NotImplementedException();
+            int score = 0;
+            for (int rank = 0; rank < BoardConstants.BoardSize; rank++)
+            {
+                for (int file = 0; file < BoardConstants.BoardSize; file++)
+                {
+                    var piece = board.ChessBoard[rank][file];
+                    if (piece != null)
+                    {
+                        int positionalScore = piece.CalculatePositionScore(board);
+                        if (positionalScore != 0)
+                        {
+
+                        }
+                        score += piece.Color == evaluatingColor ? positionalScore : -positionalScore;
+                    }
+                }
+            }
+            return score;
         }
 
         private int EvalutePieceValues(Board board, PlayerColor evaluatingColor)
@@ -32,7 +49,7 @@ namespace chess_engine.engine
                     var piece = board.ChessBoard[rank][file];
                     if (piece != null)
                     {
-                        int pieceValue = GetPieceValue(piece.Type);
+                        int pieceValue = piece.GetPieceValue();
                         score += piece.Color == evaluatingColor ? pieceValue : -pieceValue;
                     }
                 }
@@ -91,20 +108,6 @@ namespace chess_engine.engine
 
             // Stalemate
             return 0;
-        }
-
-        private static int GetPieceValue(PieceType pieceType)
-        {
-            return pieceType switch
-            {
-                PieceType.Pawn => 100,
-                PieceType.Knight => 320,
-                PieceType.Bishop => 330,
-                PieceType.Rook => 500,
-                PieceType.Queen => 900,
-                PieceType.King => 2000000,
-                _ => 0,
-            };
         }
     }
 }

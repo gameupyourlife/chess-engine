@@ -84,7 +84,9 @@ namespace chess_engine.commands
                 // Evaluate from opponent's perspective (they will move next), then negate
                 var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
                 int value = -_evaluator.EvaluateWithDepth(Board, 4, opponentColor, int.MinValue, int.MaxValue);
-                
+
+                Console.WriteLine("{0} {1}", move.ToString(), value);
+
                 evaluatedMoves.Add((move, value));
 
                 Board.UndoMove();

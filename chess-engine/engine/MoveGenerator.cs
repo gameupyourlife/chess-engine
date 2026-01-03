@@ -71,10 +71,9 @@ namespace chess_engine.engine
         /// </summary>
         public static bool IsMoveLegal(Board board, Square from, Square to, PieceType? promotionPiece = null)
         {
-            bool wasInCheck = board.Check;
             board.MakeMove(from, to, promotionPiece);
 
-            bool isIllegal = board.Check && wasInCheck;
+            bool isIllegal = board.Check;
 
             board.UndoMove();
 
