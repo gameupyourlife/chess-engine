@@ -145,8 +145,9 @@ namespace chess_engine.game
 
         public void MakeMove(Square from, Square to, PieceType? promotionPiece = null)
         {
-            Piece movedPiece = ChessBoard[from.Row][from.Col]
-                ?? throw new Exception("Tried to move from a field with no Piece");
+            Piece? movedPiece = ChessBoard[from.Row][from.Col];
+            if(movedPiece == null)    
+                throw new Exception($"Tried to move from a field with no Piece {from.ToString()} {to.ToString()}");
             Piece? capturedPiece = ChessBoard[to.Row][to.Col];
 
             MoveHistory history = new()

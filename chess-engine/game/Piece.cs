@@ -92,7 +92,11 @@
                 var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
                 if (targetPiece != null && targetPiece.Color == Color)
                 {
-                    score += (int)Math.Round(targetPiece.GetPieceValue() * 0.01);
+                    score += targetPiece.Type switch
+                    {
+                        PieceType.King => 0,
+                        _ => (int)Math.Round(targetPiece.GetPieceValue() * 0.01),
+                    };
                 }
             }
 
@@ -129,14 +133,14 @@
 
             var pieceChessBoardScores = new int[][]
             {
-                [ 60, 60, 60, 60, 60, 60, 60, 60],
-                [  5,  6,  7,  8,  8,  7,  6,  5],
-                [4,5,6,7,7,6,5,4],
-                [3,4,10,20,20,10,4,3],
-                [2, 3, 10, 20, 20, 10, 3, 2],
-                [1, 2, 7, 7, 7,7,2,1],
-                [0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],
+                [60,60,60,60,60,60,60,60],
+                [ 5, 6, 7,  8,  8,  7,  6,  5],
+                [ 4, 5,6,7,7,6,5,4],
+                [ 3, 4,10,20,20,10,4,3],
+                [ 2, 3, 10, 20, 20, 10, 3, 2],
+                [ 1, 2, 7, 7, 7,7,2,1],
+                [ 0, 0,0,0,0,0,0,0],
+                [ 0, 0,0,0,0,0,0,0],
             };
 
             int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;

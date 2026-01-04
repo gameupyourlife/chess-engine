@@ -15,6 +15,7 @@ namespace chess_engine
         POSITION,
         QUIT,
         STOP,
+        EVAL,
     }
 
     internal class IOService
@@ -38,6 +39,7 @@ namespace chess_engine
                 "POSITION" => InputCommand.POSITION,
                 "QUIT" => InputCommand.QUIT,
                 "STOP" => InputCommand.STOP,
+                "EVAL" => InputCommand.EVAL,
                 _ => null,
             };
         }

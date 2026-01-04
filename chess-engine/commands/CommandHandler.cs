@@ -37,6 +37,29 @@ namespace chess_engine.commands
                 case InputCommand.GO:
                     HandleGoCommand();
                     break;
+                case InputCommand.EVAL:
+                    var evaluatedMoves = new List<(Move Move, int Value, List<Move> PrincipalVariation)>();
+                    Move[] legalMoves = [PositionCommandHandler.ParseMove(input.Split(' ')[1])];
+
+                    foreach (var move in legalMoves)
+                    {
+                        Board!.MakeMove(move.From, move.To, move.PromotionPiece);
+
+                        // Evaluate from opponent's perspective (they will move next), then negate
+                        var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
+                        var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, 6, Board.OurColor, opponentColor, int.MinValue, int.MaxValue);
+
+                        Console.WriteLine("{0} {1} pv: {2}", move.ToString(), value, string.Join(" ", pv));
+
+                        evaluatedMoves.Add((move, value, pv));
+
+                        Board.UndoMove();
+                    }
+
+                    var (bestEvalMove, bestEvalValue, bestEvalPV) = FindBestMove(evaluatedMoves);
+                    Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", bestEvalPV));
+                    _ioService.SendBestMove((bestEvalMove.From, bestEvalMove.To, bestEvalMove.PromotionPiece));
+                    break;
                 default:
                     Console.WriteLine($"Command {command} received but not implemented yet.");
                     break;
@@ -68,26 +91,27 @@ namespace chess_engine.commands
                 return;
             }
 
-            var bestMove = FindBestMove(evaluatedMoves);
-            _ioService.SendBestMove((bestMove.Move.From, bestMove.Move.To, bestMove.Move.PromotionPiece));
+            var (bestMove, bestValue, principalVariation) = FindBestMove(evaluatedMoves);
+            Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", principalVariation));
+            _ioService.SendBestMove((bestMove.From, bestMove.To, bestMove.PromotionPiece));
         }
 
-        private List<(Move Move, int Value)> EvaluateAllMoves()
+        private List<(Move Move, int Value, List<Move> PrincipalVariation)> EvaluateAllMoves()
         {
-            var evaluatedMoves = new List<(Move Move, int Value)>();
+            var evaluatedMoves = new List<(Move Move, int Value, List<Move> PrincipalVariation)>();
             var legalMoves = _moveGenerator.GetAllLegalMoves(Board!, Board!.OurColor);
 
             foreach (var move in legalMoves)
-            {
+            {   
                 Board!.MakeMove(move.From, move.To, move.PromotionPiece);
 
                 // Evaluate from opponent's perspective (they will move next), then negate
                 var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
-                int value = -_evaluator.EvaluateWithDepth(Board, 4, opponentColor, int.MinValue, int.MaxValue);
+                var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, 4, Board.OurColor, opponentColor, int.MinValue, int.MaxValue);
 
-                Console.WriteLine("{0} {1}", move.ToString(), value);
+                Console.WriteLine("{0} {1} pv: {2}", move.ToString(), value, string.Join(" ", pv));
 
-                evaluatedMoves.Add((move, value));
+                evaluatedMoves.Add((move, value, pv));
 
                 Board.UndoMove();
             }
@@ -95,7 +119,7 @@ namespace chess_engine.commands
             return evaluatedMoves;
         }
 
-        private static (Move Move, int Value) FindBestMove(List<(Move Move, int Value)> evaluatedMoves)
+        private static (Move Move, int Value, List<Move> PrincipalVariation) FindBestMove(List<(Move Move, int Value, List<Move> PrincipalVariation)> evaluatedMoves)
         {
             var bestMove = evaluatedMoves[0];
 
