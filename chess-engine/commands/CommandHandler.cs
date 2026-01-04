@@ -116,6 +116,8 @@ namespace chess_engine.commands
                 Board.UndoMove();
             }
 
+            Console.WriteLine("info string Total legal moves evaluated: {0}", _evaluator.NumOfVisitedNodes);
+
             return evaluatedMoves;
         }
 

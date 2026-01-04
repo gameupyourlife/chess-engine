@@ -6,13 +6,13 @@ namespace chess_engine.engine
     internal class Evaluator
     {
         private readonly MoveGenerator _moveGenerator = new();
+        public int NumOfVisitedNodes { get; private set; } = 0;
 
         public int EvaluatePosition(Board board, PlayerColor evaluatingColor)
         {
             int totalScore = 0;
             totalScore += EvalutePieceValues(board, evaluatingColor);
             totalScore += EvaluatePiecePositionScores(board, evaluatingColor);
-
 
             return totalScore;
         }
@@ -72,6 +72,7 @@ namespace chess_engine.engine
         /// <returns></returns>
         public int EvaluateWithDepth(Board board, int depth, PlayerColor ourColor, PlayerColor colorToMove, int alpha, int beta)
         {
+            NumOfVisitedNodes ++;
             if (depth == 0)
             {
                 return EvaluatePosition(board, ourColor);
@@ -150,6 +151,7 @@ namespace chess_engine.engine
         public (int Value, List<Move> PrincipalVariation) EvaluateWithDepthAndPV(Board board, int depth, PlayerColor ourColor,
             PlayerColor colorToMove, int alpha, int beta)
         {
+            NumOfVisitedNodes ++;
             if (depth == 0)
             {
                 return (EvaluatePosition(board, ourColor), new List<Move>());
