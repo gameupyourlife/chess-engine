@@ -337,6 +337,12 @@ namespace chess_engine.engine
             {
                 return 0;
             }
+
+            // Check for 3-fold repetition draw immediately
+            if (board.IsThreefoldRepetition())
+            {
+                return 0;
+            }
             
             // Compute position hash for transposition table lookup
             ulong hash = ZobristHash.ComputeHash(board);
@@ -471,6 +477,12 @@ namespace chess_engine.engine
 
             // Check for 50-move rule draw immediately
             if (board.IsFiftyMoveRuleDraw())
+            {
+                return (0, new List<Move>());
+            }
+
+            // Check for 3-fold repetition draw immediately
+            if (board.IsThreefoldRepetition())
             {
                 return (0, new List<Move>());
             }
@@ -654,6 +666,12 @@ namespace chess_engine.engine
         {
             // Check for 50-move rule draw
             if (board.IsFiftyMoveRuleDraw())
+            {
+                return 0;
+            }
+
+            // Check for 3-fold repetition draw
+            if (board.IsThreefoldRepetition())
             {
                 return 0;
             }

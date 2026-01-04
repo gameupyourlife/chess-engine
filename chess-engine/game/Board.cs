@@ -30,6 +30,7 @@ namespace chess_engine.game
         public PlayerColor PreviousActiveColor { get; set; }
         public bool PreviousCheckState { get; set; }
         public PieceType? PromotedFrom { get; set; }
+        public ulong PositionHash { get; set; }
     }
 
     internal class Board
@@ -58,15 +59,33 @@ namespace chess_engine.game
         public bool Check { get; set; } = false;
 
         private readonly Stack<MoveHistory> _moveHistoryStack = new();
+        private readonly Dictionary<ulong, int> _positionHistory = new();
 
         public bool IsFiftyMoveRuleDraw()
         {
             return HalfmoveClock >= 100;
         }
 
+        public bool IsThreefoldRepetition()
+        {
+            ulong currentHash = chess_engine.engine.ZobristHash.ComputeHash(this);
+            
+            // Check if current position has occurred 3 or more times
+            if (_positionHistory.TryGetValue(currentHash, out int count))
+            {
+                return count >= 2; // Current occurrence + 2 previous = 3 total
+            }
+            
+            return false;
+        }
+
         public Board(string fenString)
         {
             LoadFromFEN(fenString);
+            
+            // Initialize position history with starting position
+            ulong initialHash = chess_engine.engine.ZobristHash.ComputeHash(this);
+            _positionHistory[initialHash] = 1;
         }
 
         public void UndoMove()
@@ -77,6 +96,17 @@ namespace chess_engine.game
             }
 
             MoveHistory lastMove = _moveHistoryStack.Pop();
+
+            // Remove current position from history
+            ulong currentHash = chess_engine.engine.ZobristHash.ComputeHash(this);
+            if (_positionHistory.ContainsKey(currentHash))
+            {
+                _positionHistory[currentHash]--;
+                if (_positionHistory[currentHash] <= 0)
+                {
+                    _positionHistory.Remove(currentHash);
+                }
+            }
 
             // Handle promotion undo - restore pawn
             if (lastMove.PromotedFrom.HasValue)
@@ -155,6 +185,9 @@ namespace chess_engine.game
                 throw new Exception($"Tried to move from a field with no Piece {from.ToString()} {to.ToString()}");
             Piece? capturedPiece = ChessBoard[to.Row][to.Col];
 
+            // Compute hash before making the move
+            ulong positionHashBeforeMove = chess_engine.engine.ZobristHash.ComputeHash(this);
+
             MoveHistory history = new()
             {
                 From = from,
@@ -169,7 +202,8 @@ namespace chess_engine.game
                 PreviousFullmoveNumber = FullmoveNumber,
                 PreviousActiveColor = ActiveColor,
                 PreviousCheckState = Check,
-                PromotedFrom = null
+                PromotedFrom = null,
+                PositionHash = positionHashBeforeMove
             };
 
             _moveHistoryStack.Push(history);
@@ -196,6 +230,24 @@ namespace chess_engine.game
 
             // Update check status
             UpdateCheckStatus();
+
+            // Update position history for repetition detection
+            ulong positionHashAfterMove = chess_engine.engine.ZobristHash.ComputeHash(this);
+            if (_positionHistory.ContainsKey(positionHashAfterMove))
+            {
+                _positionHistory[positionHashAfterMove]++;
+            }
+            else
+            {
+                _positionHistory[positionHashAfterMove] = 1;
+            }
+
+            // Reset position history on irreversible moves (pawn move or capture)
+            if (movedPiece.Type == PieceType.Pawn || capturedPiece != null)
+            {
+                _positionHistory.Clear();
+                _positionHistory[positionHashAfterMove] = 1;
+            }
         }
 
         // Backward compatibility overload
