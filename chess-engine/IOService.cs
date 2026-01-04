@@ -75,6 +75,17 @@ namespace chess_engine
             Console.WriteLine($"bestmove {algebraic}");
         }
 
+        public void SendBestMoveWithInfo(Move move, int value, List<Move> pv, int MoveNumber )
+        {
+            string algebraic = PositionCommandHandler.ToAlgebraicNotation(move);
+            Console.WriteLine($"bestmove {algebraic}");
+            Console.Write($"info score cp {value}");
+            Console.Write($" currmovenumber  {MoveNumber}");
+            Console.Write($" depth {pv.Count}");
+            Console.Write($" nodes 123456");
+            Console.WriteLine($" pv {string.Join(' ', pv)}");
+        }
+
         public void SendOutput(string output)
         {
             Console.WriteLine(output);

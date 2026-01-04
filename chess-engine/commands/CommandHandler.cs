@@ -102,15 +102,34 @@ namespace chess_engine.commands
             //{
             //    Console.WriteLine("info string No legal moves available");
             //    return;
-            //}
+            //} 
 
             var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, BoardConstants.SearchDepth, 0, Board.OurColor, Board.OurColor, int.MinValue, int.MaxValue);
 
-            var bestMove = pv[0];
+            try
+            {
+                var bestMove = pv[0];
 
-            //var (bestMove, bestValue, principalVariation) = FindBestMove(evaluatedMoves);
-            Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", pv));
-            _ioService.SendBestMove((bestMove.From, bestMove.To, bestMove.PromotionPiece));
+                //var (bestMove, bestValue, principalVariation) = FindBestMove(evaluatedMoves);
+                Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", pv));
+                //_ioService.SendBestMove((bestMove.From, bestMove.To, bestMove.PromotionPiece));
+                _ioService.SendBestMoveWithInfo(bestMove, value, pv, Board.FullmoveNumber);
+            } catch
+            {
+                Console.WriteLine($"info string !!!!Tried to access bestmove failed. Pv was follwing: {string.Join(" ", pv)}");
+                var evaluatedMoves = EvaluateAllMoves();
+
+                if (evaluatedMoves.Count == 0)
+                {
+                    Console.WriteLine("info string No legal moves available");
+                    return;
+                }
+
+                var (bestMove, bestValue, principalVariation) = FindBestMove(evaluatedMoves);
+                Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", pv));
+                //_ioService.SendBestMove((bestMove.From, bestMove.To, bestMove.PromotionPiece));
+                _ioService.SendBestMoveWithInfo(bestMove, value, pv, Board.FullmoveNumber);
+            }
         }
 
         private List<(Move Move, int Value, List<Move> PrincipalVariation)> EvaluateAllMoves()
