@@ -2,6 +2,8 @@
 using chess_engine.game;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 
 namespace chess_engine.commands
 {
@@ -38,12 +40,21 @@ namespace chess_engine.commands
                     HandleGoCommand();
                     break;
                 case InputCommand.EVAL:
+                    Stopwatch sw = new Stopwatch();
+                    sw.Start();
+
                     var evaluatedMoves = new List<(Move Move, int Value, List<Move> PrincipalVariation)>();
                     Move[] legalMoves = [PositionCommandHandler.ParseMove(input.Split(' ')[1])];
 
                     foreach (var move in legalMoves)
                     {
                         Board!.MakeMove(move.From, move.To, move.PromotionPiece);
+
+                        if (Board.Check)
+                        {
+                            Board.UndoMove();
+                            continue;
+                        }
 
                         // Evaluate from opponent's perspective (they will move next), then negate
                         var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
@@ -57,6 +68,8 @@ namespace chess_engine.commands
                     }
 
                     var (bestEvalMove, bestEvalValue, bestEvalPV) = FindBestMove(evaluatedMoves);
+                    sw.Stop();
+                    Console.WriteLine("Elapsed={0}", sw.Elapsed.TotalSeconds);
                     Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", bestEvalPV));
                     _ioService.SendBestMove((bestEvalMove.From, bestEvalMove.To, bestEvalMove.PromotionPiece));
                     break;
@@ -83,27 +96,40 @@ namespace chess_engine.commands
 
             Board.OurColor = Board.ActiveColor;
 
-            var evaluatedMoves = EvaluateAllMoves();
+            //var evaluatedMoves = EvaluateAllMoves();
 
-            if (evaluatedMoves.Count == 0)
-            {
-                Console.WriteLine("info string No legal moves available");
-                return;
-            }
+            //if (evaluatedMoves.Count == 0)
+            //{
+            //    Console.WriteLine("info string No legal moves available");
+            //    return;
+            //}
 
-            var (bestMove, bestValue, principalVariation) = FindBestMove(evaluatedMoves);
-            Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", principalVariation));
+            var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, BoardConstants.SearchDepth, 0, Board.OurColor, Board.OurColor, int.MinValue, int.MaxValue);
+
+            var bestMove = pv[0];
+
+            //var (bestMove, bestValue, principalVariation) = FindBestMove(evaluatedMoves);
+            Console.WriteLine("info string Best move sequence: {0}", string.Join(" ", pv));
             _ioService.SendBestMove((bestMove.From, bestMove.To, bestMove.PromotionPiece));
         }
 
         private List<(Move Move, int Value, List<Move> PrincipalVariation)> EvaluateAllMoves()
         {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
             var evaluatedMoves = new List<(Move Move, int Value, List<Move> PrincipalVariation)>();
             var legalMoves = _moveGenerator.GetAllLegalMoves(Board!, Board!.OurColor);
 
             foreach (var move in legalMoves)
             {   
                 Board!.MakeMove(move.From, move.To, move.PromotionPiece);
+
+                if (Board.Check)
+                {
+                    Board.UndoMove();
+                    continue;
+                }
 
                 // Evaluate from opponent's perspective (they will move next), then negate
                 var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
@@ -116,7 +142,9 @@ namespace chess_engine.commands
                 Board.UndoMove();
             }
 
-            Console.WriteLine("info string Total legal moves evaluated: {0}", _evaluator.NumOfVisitedNodes);
+            sw.Stop();
+            Console.WriteLine("Elapsed={0}", sw.Elapsed.TotalSeconds);
+            Console.WriteLine("info string Total legal moves evaluated: {0} Nodes advanced: {1} Rate: {2}", _evaluator.NumOfVisitedNodes, _evaluator.NumOfAdvancedDeapthNodes, (_evaluator.NumOfAdvancedDeapthNodes/_evaluator.NumOfVisitedNodes) );
 
             return evaluatedMoves;
         }
