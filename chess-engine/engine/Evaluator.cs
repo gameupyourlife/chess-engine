@@ -1,4 +1,5 @@
 ﻿using chess_engine.game;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace chess_engine.engine
@@ -71,16 +72,11 @@ namespace chess_engine.engine
             return score;
         }
 
+        [Obsolete("EvaluateWithDepth is deprecated, please use EvaluateWithDepthAndPV instead.")]
         /// <summary>
-        /// Eval Positive - Playing as white - White is maximizing player, Black is minimizing player
-        /// -Eval Negative - Playing as black - Black is maximizing player, White is minimizing player
-        /// 
-        /// 
-        /// 
-        /// 
-        /// 
         /// 
         /// </summary>
+        /// <depr
         /// <param name="board"></param>
         /// <param name="depth"></param>
         /// <param name="colorToMove"></param>
@@ -165,13 +161,27 @@ namespace chess_engine.engine
             }
         }
 
-        public (int Value, List<Move> PrincipalVariation) EvaluateWithDepthAndPV(Board board, int depth, PlayerColor ourColor,
+        const int MaxDepth = BoardConstants.SearchDepth + 4;
+        public (int Value, List<Move> PrincipalVariation) EvaluateWithDepthAndPV(Board board, int depth, int numOfMovesPlayed, PlayerColor ourColor,
             PlayerColor colorToMove, int alpha, int beta)
         {
             NumOfVisitedNodes ++;
             if (depth == 0)
             {
-                return (EvaluatePosition(board, ourColor), new List<Move>());
+                int eval = EvaluatePosition(board, ourColor);
+
+                if (numOfMovesPlayed >= MaxDepth)
+                {
+                    return (eval, new List<Move>());
+                }
+
+                if (eval > alpha - board.FullmoveNumber * 10 / MaxDepth && eval < beta + board.FullmoveNumber * 10 / MaxDepth)
+                {
+                    var(newEval, pv) = EvaluateWithDepthAndPV(board, 2, numOfMovesPlayed, ourColor, colorToMove, alpha, beta);
+                    return (newEval, pv);
+                }
+
+                return (eval, new List<Move>());
             }
 
             var moves = _moveGenerator.GetAllLegalMoves(board, colorToMove);
@@ -199,7 +209,7 @@ namespace chess_engine.engine
                     }
 
                     // Recursively evaluate opponent's best response
-                    var (eval, pv) = EvaluateWithDepthAndPV(board, depth - 1, ourColor, opponentColor, alpha, beta);
+                    var (eval, pv) = EvaluateWithDepthAndPV(board, depth - 1, numOfMovesPlayed + 1, ourColor, opponentColor, alpha, beta);
 
                     board.UndoMove();
 
@@ -234,7 +244,7 @@ namespace chess_engine.engine
                     }
 
                     // Recursively evaluate opponent's best response
-                    var (eval, pv) = EvaluateWithDepthAndPV(board, depth - 1, ourColor, opponentColor, alpha, beta);
+                    var (eval, pv) = EvaluateWithDepthAndPV(board, depth - 1, numOfMovesPlayed + 1, ourColor, opponentColor, alpha, beta);
 
                     board.UndoMove();
 

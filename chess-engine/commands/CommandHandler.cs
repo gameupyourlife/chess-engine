@@ -47,7 +47,7 @@ namespace chess_engine.commands
 
                         // Evaluate from opponent's perspective (they will move next), then negate
                         var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
-                        var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, BoardConstants.SearchDepth, Board.OurColor, opponentColor, int.MinValue, int.MaxValue);
+                        var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, BoardConstants.SearchDepth, 0, Board.OurColor, opponentColor, int.MinValue, int.MaxValue);
 
                         Console.WriteLine("{0} {1} pv: {2}", move.ToString(), value, string.Join(" ", pv));
 
@@ -107,7 +107,7 @@ namespace chess_engine.commands
 
                 // Evaluate from opponent's perspective (they will move next), then negate
                 var opponentColor = Board.OurColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
-                var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, BoardConstants.SearchDepth, Board.OurColor, opponentColor, int.MinValue, int.MaxValue);
+                var (value, pv) = _evaluator.EvaluateWithDepthAndPV(Board, BoardConstants.SearchDepth, 0, Board.OurColor, opponentColor, int.MinValue, int.MaxValue);
 
                 Console.WriteLine("{0} {1} pv: {2}", move.ToString(), value, string.Join(" ", pv));
 
