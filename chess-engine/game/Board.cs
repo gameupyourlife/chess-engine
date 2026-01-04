@@ -338,14 +338,19 @@ namespace chess_engine.game
 
         private void UpdateCheckStatus()
         {
+            // After a move, ActiveColor has already been switched to the opponent.
+            // We need to check if the side that just moved left their king in check (illegal move).
+            // The side that just moved is the opposite of the current ActiveColor.
+            PlayerColor sideJustMoved = ActiveColor == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
+            
             for (int row = 0; row < BoardConstants.BoardSize; row++)
             {
                 for (int col = 0; col < BoardConstants.BoardSize; col++)
                 {
                     var piece = ChessBoard[row][col];
-                    if (piece?.Type == PieceType.King && piece.Color == OurColor)
+                    if (piece?.Type == PieceType.King && piece.Color == sideJustMoved)
                     {
-                        Check = _attackDetector.IsSquareUnderAttack(piece.Position, this, OurColor);
+                        Check = _attackDetector.IsSquareUnderAttack(piece.Position, this, sideJustMoved);
                         return;
                     }
                 }

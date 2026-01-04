@@ -68,6 +68,9 @@
             {
                 PieceType.Pawn => CalculatePawnPositionScore(board),
                 PieceType.Knight => CalculateKnightPositionScore(board),
+                PieceType.Bishop => CalculateBishopPositionScore(board),
+                PieceType.Rook => CalculateRookPositionScore(board),
+                PieceType.Queen => CalculateQueenPositionScore(board),
                 PieceType.King => CalculateKingPositonScore(board),
                 _ => 0
             };
@@ -75,34 +78,109 @@
 
         private int CalculateKingPositonScore(Board board)
         {
-            return 0;
+            var pieceChessBoardScores = new int[][]
+            {
+                [-30, -40, -40, -50, -50, -40, -40, -30],
+                [-30, -40, -40, -50, -50, -40, -40, -30],
+                [-30, -40, -40, -50, -50, -40, -40, -30],
+                [-30, -40, -40, -50, -50, -40, -40, -30],
+                [-20, -30, -30, -40, -40, -30, -30, -20],
+                [-10, -20, -20, -20, -20, -20, -20, -10],
+                [ 20,  20,   0,   0,   0,   0,  20,  20],
+                [ 20,  30,  10,   0,   0,  10,  30,  20]
+            };
+
+            // Late game king heatmap: encourage centralization and activity
+            var pieceChessBoardScoresLategame = new int[][]
+            {
+                new int[] { -50, -40, -30, -20, -20, -30, -40, -50 },
+                new int[] { -30, -20, -10,   0,   0, -10, -20, -30 },
+                new int[] { -30, -10,  20,  30,  30,  20, -10, -30 },
+                new int[] { -30, -10,  30,  40,  40,  30, -10, -30 },
+                new int[] { -30, -10,  30,  40,  40,  30, -10, -30 },
+                new int[] { -30, -10,  20,  30,  30,  20, -10, -30 },
+                new int[] { -30, -30,   0,   0,   0,   0, -30, -30 },
+                new int[] { -50, -30, -30, -30, -30, -30, -30, -50 }
+            };
+
+            int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;
+            bool isEndgame = IsEndgame(board);
+            var table = isEndgame ? pieceChessBoardScoresLategame : pieceChessBoardScores;
+            return table[colorCorrectedRow][Position.Col];
         }
 
-        private int CalculateKnightPositionScore(Board board)
+        // Simple endgame detection: true if both sides have no queens or only minor pieces left
+        private bool IsEndgame(Board board)
         {
-            int score = 0;
-            var moves = new List<Square>();
-
-            foreach (var move in Direction.KnightMoves)
+            int queenCount = 0;
+            int minorMajorCount = 0;
+            for (int r = 0; r < BoardConstants.BoardSize; r++)
             {
-                var targetPos = Position + move;
-                if (!targetPos.IsWithinBounds())
-                    continue;
-
-                var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
-                if (targetPiece != null && targetPiece.Color == Color)
+                for (int c = 0; c < BoardConstants.BoardSize; c++)
                 {
-                    score += targetPiece.Type switch
-                    {
-                        PieceType.King => 0,
-                        _ => (int)Math.Round(targetPiece.GetPieceValue() * 0.01),
-                    };
+                    var piece = board.ChessBoard[r][c];
+                    if (piece == null) continue;
+                    if (piece.Type == PieceType.Queen) queenCount++;
+                    if (piece.Type == PieceType.Queen || piece.Type == PieceType.Rook || piece.Type == PieceType.Knight || piece.Type == PieceType.Bishop)
+                        minorMajorCount++;
                 }
             }
+            // Endgame if no queens or only one major piece left
+            return queenCount == 0 || minorMajorCount <= 3;
+        }
 
+        private int CalculateQueenPositionScore(Board board)
+        {
+            var pieceChessBoardScores = new int[][]
+            {
+                [-20, -10, -10,  -5,  -5, -10, -10, -20],
+                [-10,   0,   0,   0,   0,   0,   0, -10],
+                [-10,   0,   5,   5,   5,   5,   0, -10],
+                [ -5,   0,   5,   5,   5,   5,   0,  -5],
+                [ -5,   0,   5,   5,   5,   5,   0,  -5],
+                [-10,   5,   5,   5,   5,   5,   0, -10],
+                [-10,   0,   0,   0,   0,   0,   0, -10],
+                [-20, -10, -10,  -5,  -5, -10, -10, -20]
+            };
 
+            int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;
+            return pieceChessBoardScores[colorCorrectedRow][Position.Col];
+        }
 
-            return score;
+        private int CalculateRookPositionScore(Board board)
+        {
+            var pieceChessBoardScores = new int[][]
+            {
+                [ 5,  5,  5,  5,  5,  5,  5,  5],
+                [ 5, 10, 10, 10, 10, 10, 10,  5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [ 0,  0,  0,  5,  5,  0,  0,  0]
+            };
+
+            int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;
+            return pieceChessBoardScores[colorCorrectedRow][Position.Col];
+        }
+
+        private int CalculateBishopPositionScore(Board board)
+        {
+            var pieceChessBoardScores = new int[][]
+            {
+                [-20, -10, -10, -10, -10, -10, -10, -20],
+                [-10,   0,   0,   0,   0,   0,   0, -10],
+                [-10,   0,   5,  10,  10,   5,   0, -10],
+                [-10,   5,   5,  10,  10,   5,   5, -10],
+                [-10,   0,  10,  10,  10,  10,   0, -10],
+                [-10,  10,  10,  10,  10,  10,  10, -10],
+                [-10,  20,   0,   5,   5,   0,  20, -10],
+                [-20, -10, -10, -10, -10, -10, -10, -20]
+            };
+
+            int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;
+            return pieceChessBoardScores[colorCorrectedRow][Position.Col];
         }
 
         private int CalculatePawnPositionScore(Board board)
@@ -133,9 +211,9 @@
 
             var pieceChessBoardScores = new int[][]
             {
-                [60,60,60,60,60,60,60,60],
-                [ 5, 6, 7,  8,  8,  7,  6,  5],
-                [ 4, 5,6,7,7,6,5,4],
+                [60, 60, 60, 60, 60, 60, 60, 60],
+                [ 5,  6,  7,  8,  8,  7,  6,  5],
+                [ 4,  5,  6,  7,  7,  6,  5,  4],
                 [ 3, 4,10,20,20,10,4,3],
                 [ 2, 3, 10, 20, 20, 10, 3, 2],
                 [ 1, 2, 7, 7, 7,7,2,1],
@@ -359,6 +437,47 @@
                     moves.Add(capturePos);
                 }
             }
+        }
+        
+        private int CalculateKnightPositionScore(Board board)
+        {
+            int score = 0;
+            
+            // Protection bonus
+            foreach (var move in Direction.KnightMoves)
+            {
+                var targetPos = Position + move;
+                if (!targetPos.IsWithinBounds())
+                    continue;
+
+                var targetPiece = board.ChessBoard[targetPos.Row][targetPos.Col];
+                if (targetPiece != null && targetPiece.Color == Color)
+                {
+                    score += targetPiece.Type switch
+                    {
+                        PieceType.King => 0,
+                        _ => (int)Math.Round(targetPiece.GetPieceValue() * 0.01),
+                    };
+                }
+            }
+
+            // Position heatmap
+            var pieceChessBoardScores = new int[][]
+            {
+                [-50, -40, -30, -30, -30, -30, -40, -50],
+                [-40, -20,   0,   0,   0,   0, -20, -40],
+                [-30,   0,  10,  15,  15,  10,   0, -30],
+                [-30,   5,  15,  20,  20,  15,   5, -30],
+                [-30,   0,  15,  20,  20,  15,   0, -30],
+                [-30,   5,  10,  15,  15,  10,   5, -30],
+                [-40, -20,   0,   5,   5,   0, -20, -40],
+                [-50, -40, -30, -30, -30, -30, -40, -50]
+            };
+
+            int colorCorrectedRow = Color == PlayerColor.White ? Position.Row : 7 - Position.Row;
+            score += pieceChessBoardScores[colorCorrectedRow][Position.Col];
+
+            return score;
         }
     }
 }

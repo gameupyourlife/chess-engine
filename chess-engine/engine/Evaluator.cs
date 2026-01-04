@@ -84,29 +84,6 @@ namespace chess_engine.engine
                 return EvaluateTerminalPosition(board, ourColor);
             }
 
-            //int maxEval = int.MinValue;
-            //PlayerColor opponentColor = GetOpponentColor(colorToMove);
-
-            //foreach (var move in moves)
-            //{
-
-            //    board.MakeMove(move.From, move.To, move.PromotionPiece);
-
-            //    // Recursively evaluate opponent's best response (negate the result)
-            //    int eval = EvaluateWithDepth(board, depth - 1, opponentColor, -beta, -alpha);
-
-            //    board.UndoMove();
-
-            //    maxEval = Math.Max(maxEval, eval);
-            //    alpha = Math.Max(alpha, eval);
-
-            //    if (beta <= alpha)
-            //    {
-            //        break; // Cutoff
-            //    }
-            //}
-            //return maxEval;
-
             // Maximising if colorToMove is ourColor
             if (ourColor == colorToMove)
             {
@@ -136,7 +113,7 @@ namespace chess_engine.engine
 
                     alpha = Math.Max(alpha, maxEval);
                 }
-                return alpha;
+                return maxEval;
             }
             else
             {
@@ -146,6 +123,12 @@ namespace chess_engine.engine
                 foreach (var move in moves)
                 {
                     board.MakeMove(move.From, move.To, move.PromotionPiece);
+                    
+                    if (board.Check)
+                    {
+                        board.UndoMove();
+                        continue;
+                    }
 
                     // Recursively evaluate opponent's best response (negate the result)
                     int eval = EvaluateWithDepth(board, depth - 1, ourColor, opponentColor, alpha, beta);
@@ -156,15 +139,16 @@ namespace chess_engine.engine
                     minEval = Math.Min(minEval, eval);
 
                     if (minEval <= alpha)
-                        break; // Beta cutoff
+                        break; // Alpha cutoff
 
                     beta = Math.Min(beta, minEval);
                 }
-                return beta;
+                return minEval;
             }
         }
 
-        public (int Value, List<Move> PrincipalVariation) EvaluateWithDepthAndPV(Board board, int depth, PlayerColor ourColor, PlayerColor colorToMove, int alpha, int beta)
+        public (int Value, List<Move> PrincipalVariation) EvaluateWithDepthAndPV(Board board, int depth, PlayerColor ourColor,
+            PlayerColor colorToMove, int alpha, int beta)
         {
             if (depth == 0)
             {
@@ -212,7 +196,7 @@ namespace chess_engine.engine
 
                     alpha = Math.Max(alpha, maxEval);
                 }
-                return (alpha, bestVariation);
+                return (maxEval, bestVariation);
             }
             else
             {
@@ -223,6 +207,12 @@ namespace chess_engine.engine
                 foreach (var move in moves)
                 {
                     board.MakeMove(move.From, move.To, move.PromotionPiece);
+
+                    if (board.Check)
+                    {
+                        board.UndoMove();
+                        continue;
+                    }
 
                     // Recursively evaluate opponent's best response
                     var (eval, pv) = EvaluateWithDepthAndPV(board, depth - 1, ourColor, opponentColor, alpha, beta);
@@ -241,7 +231,7 @@ namespace chess_engine.engine
 
                     beta = Math.Min(beta, minEval);
                 }
-                return (beta, bestVariation);
+                return (minEval, bestVariation);
             }
         }
 

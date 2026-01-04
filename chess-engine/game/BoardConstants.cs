@@ -13,6 +13,8 @@ namespace chess_engine.game
         public const int WhitePawnStartRank = 6;
         public const int BlackPawnStartRank = 1;
 
+        public const int SearchDepth = 2 * 2; // 4 full moves (8 plies)
+
         public static int GetPromotionRank(PlayerColor color) =>
             color == PlayerColor.White ? WhitePromotionRank : BlackPromotionRank;
 
