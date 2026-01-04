@@ -13,8 +13,25 @@ namespace chess_engine.engine
             int totalScore = 0;
             totalScore += EvalutePieceValues(board, evaluatingColor);
             totalScore += EvaluatePiecePositionScores(board, evaluatingColor);
+            totalScore += EvaluateEnemyKingInCheck(board, evaluatingColor);
+
 
             return totalScore;
+        }
+
+        private int EvaluateEnemyKingInCheck(Board board, PlayerColor evaluatingColor)
+        {
+            foreach (var row in board.ChessBoard)
+            {
+                foreach (var piece in row)
+                {
+                    if (piece != null && piece.Type == PieceType.King && piece.Color != evaluatingColor)
+                    {
+                        return piece.SquareIsUnderAttack(piece.Position, board) ? 70 : 0;
+                    }
+                }
+            }
+            return 0;
         }
 
         private int EvaluatePiecePositionScores(Board board, PlayerColor evaluatingColor)
