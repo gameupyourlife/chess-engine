@@ -59,6 +59,11 @@ namespace chess_engine.game
 
         private readonly Stack<MoveHistory> _moveHistoryStack = new();
 
+        public bool IsFiftyMoveRuleDraw()
+        {
+            return HalfmoveClock >= 100;
+        }
+
         public Board(string fenString)
         {
             LoadFromFEN(fenString);

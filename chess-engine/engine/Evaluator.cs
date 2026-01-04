@@ -331,6 +331,12 @@ namespace chess_engine.engine
         public int EvaluateWithDepth(Board board, int depth, PlayerColor ourColor, PlayerColor colorToMove, int alpha, int beta)
         {
             NumOfVisitedNodes++;
+
+            // Check for 50-move rule draw immediately
+            if (board.IsFiftyMoveRuleDraw())
+            {
+                return 0;
+            }
             
             // Compute position hash for transposition table lookup
             ulong hash = ZobristHash.ComputeHash(board);
@@ -462,6 +468,12 @@ namespace chess_engine.engine
             PlayerColor colorToMove, int alpha, int beta)
         {
             NumOfVisitedNodes++;
+
+            // Check for 50-move rule draw immediately
+            if (board.IsFiftyMoveRuleDraw())
+            {
+                return (0, new List<Move>());
+            }
 
             // Compute position hash for transposition table lookup
             ulong hash = ZobristHash.ComputeHash(board);
@@ -640,10 +652,19 @@ namespace chess_engine.engine
 
         private static int EvaluateTerminalPosition(Board board, PlayerColor colorToMove)
         {
+            // Check for 50-move rule draw
+            if (board.IsFiftyMoveRuleDraw())
+            {
+                return 0;
+            }
+
+            // Checkmate
             if (board.Check)
             {
                 return -1000000;
             }
+
+            // Stalemate
             return 0;
         }
     }
