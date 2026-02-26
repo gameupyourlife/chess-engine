@@ -2,7 +2,7 @@
 
 This project is a UCI-compatible chess bot written in C#.
 
-It was created together with a friend while we were on an academy of the CDE e.V.
+It was created together with a friend while we were at an academy of the CDE e.V.
 
 ## What it does
 
@@ -19,7 +19,7 @@ You can use the bot either from source or by downloading the executable from the
 From the repository root:
 
 ```bash
-dotnet run --project /home/runner/work/chess-engine/chess-engine/chess-engine/chess-engine.csproj
+dotnet run --project chess-engine/chess-engine.csproj
 ```
 
 ### Option 2: Run the released executable
